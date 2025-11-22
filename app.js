@@ -16,9 +16,11 @@ require("./models/LoginModel");
 // ROUTES
 const LoginRoute = require("./routes/LoginRoute");
 const ContactRoutes = require("./routes/ContactRoutes");
+const WebsiteInfoRoute = require("./routes/WebsiteInfoRoute");
 
 app.use("/api/admin_link", LoginRoute);
 app.use("/api/admin_link", ContactRoutes);
+app.use("/api/admin_link", WebsiteInfoRoute);
 
 // START SERVER
 const PORT = process.env.PORT || 5000;
