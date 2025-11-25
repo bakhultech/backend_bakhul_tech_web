@@ -3,6 +3,8 @@ const db = require("../config/db");
 const FAQModel = {
   initializeTable: () => {
     const sql = `
+      DROP TABLE IF EXISTS faq;
+
       CREATE TABLE IF NOT EXISTS faq (
         primary_id INT AUTO_INCREMENT PRIMARY KEY,
         question TEXT NOT NULL,
@@ -13,7 +15,7 @@ const FAQModel = {
 
     db.query(sql, (err) => {
       if (err) console.error("FAQ Table creation error:", err);
-      else console.log("FAQ table checked/created ✔");
+      else console.log("FAQ table recreated ✔");
     });
   },
 };

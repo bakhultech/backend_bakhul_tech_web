@@ -52,7 +52,6 @@ exports.getTeam = (req, res) => {
     });
   });
 };
-
 // ===================== ADD / UPDATE TEAM =====================
 exports.saveTeam = (req, res) => {
   const {
@@ -66,9 +65,7 @@ exports.saveTeam = (req, res) => {
 
   const profile_img = req.file ? req.file.filename : null;
 
-  if (!name || !position || !email || !phone) {
-    return res.json({ success: false, message: "All fields are required" });
-  }
+  // Removed mandatory field check
 
   // ------------ UPDATE ------------
   if (primary_id) {
@@ -91,7 +88,7 @@ exports.saveTeam = (req, res) => {
 
       db.query(
         updateSql,
-        [name, position, email, phone, finalImg, status, primary_id],
+        [name, position, email, phone, finalImg, status ?? 1, primary_id],
         (err) => {
           if (err) {
             console.log("UPDATE ERROR:", err);
@@ -117,7 +114,7 @@ exports.saveTeam = (req, res) => {
 
   db.query(
     sql,
-    [name, position, email, phone, profile_img, status || 1],
+    [name, position, email, phone, profile_img, status ?? 1],
     (err) => {
       if (err) {
         console.log("INSERT ERROR:", err);

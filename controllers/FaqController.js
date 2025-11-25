@@ -1,12 +1,12 @@
+// ================= FAQ CONTROLLER ===================
+
 const db = require("../config/db");
 
-// ------------------------------------------------------
-// GET FAQ → Single + All
-// ------------------------------------------------------
+// ===================== GET FAQ =====================
 exports.getFAQ = (req, res) => {
-  const primary_id = req.body?.primary_id || null; // Safe destructuring
+  const primary_id = req.body?.primary_id || null;
 
-  // 1️⃣ If primary_id exists → return only that FAQ
+  // 1️⃣ If ID is provided → return single FAQ
   if (primary_id) {
     const sql = "SELECT * FROM faq WHERE primary_id = ? LIMIT 1";
 
@@ -33,7 +33,7 @@ exports.getFAQ = (req, res) => {
     });
   }
 
-  // 2️⃣ If NO primary_id → return full list
+  // 2️⃣ No ID → return all FAQ
   else {
     const sql = "SELECT * FROM faq ORDER BY primary_id ASC";
 
@@ -54,88 +54,72 @@ exports.getFAQ = (req, res) => {
   }
 };
 
-// ------------------------------------------------------
-// ADD / UPDATE FAQ
-// ------------------------------------------------------
+// ===================== SAVE FAQ (ADD/UPDATE) =====================
+// ===================== SAVE FAQ (ADD/UPDATE) =====================
 exports.saveFAQ = (req, res) => {
   const { primary_id, question, answer } = req.body;
 
-  if (!question || !answer) {
-    return res.json({
-      success: false,
-      message: "Question & Answer required",
-    });
-  }
-
-  // 1️⃣ UPDATE existing FAQ
+  // UPDATE
   if (primary_id) {
-    const sql = `
-      UPDATE faq 
+    const updateSql = `
+      UPDATE faq
       SET question = ?, answer = ?
       WHERE primary_id = ?
     `;
 
-    db.query(sql, [question, answer, primary_id], (err) => {
+    db.query(updateSql, [question, answer, primary_id], (err) => {
       if (err) {
-        console.error("DB Error:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
+        console.error("UPDATE ERROR:", err);
+        return res.status(500).json({ success: false });
       }
 
       return res.json({
         success: true,
-        message: "FAQ updated successfully",
+        message: "FAQ Updated Successfully",
       });
     });
   }
 
-  // 2️⃣ ADD new FAQ
+  // INSERT NEW
   else {
-    const sql = `
+    const insertSql = `
       INSERT INTO faq (question, answer)
       VALUES (?, ?)
     `;
 
-    db.query(sql, [question, answer], (err) => {
+    db.query(insertSql, [question, answer], (err) => {
       if (err) {
-        console.error("DB Error:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-        });
+        console.error("INSERT ERROR:", err);
+        return res.status(500).json({ success: false });
       }
 
       return res.json({
         success: true,
-        message: "FAQ added successfully",
+        message: "FAQ Added Successfully",
       });
     });
   }
 };
 
-// ------------------------------------------------------
-// DELETE FAQ
-// ------------------------------------------------------
+// ===================== DELETE FAQ =====================
 exports.deleteFAQ = (req, res) => {
-  const primary_id = req.body?.primary_id || null;
+  const { primary_id } = req.body;
 
   if (!primary_id) {
     return res.json({
       success: false,
-      message: "FAQ ID required",
+      message: "ID required",
     });
   }
 
-  const sql = `DELETE FROM faq WHERE primary_id = ?`;
+  const sql = "DELETE FROM faq WHERE primary_id = ?";
 
   db.query(sql, [primary_id], (err) => {
     if (err) {
-      console.error("DB Error:", err);
+      console.error("DELETE FAQ ERROR:", err);
       return res.status(500).json({
         success: false,
-        message: "Database error",
+        message: "Delete failed",
       });
     }
 

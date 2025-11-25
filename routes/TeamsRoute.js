@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
 const TeamsController = require("../controllers/TeamsController");
 const { upload } = TeamsController;
-router.post("/get_teams", TeamsController.getTeam);
+const textOnly = multer();
+router.post("/get_teams", textOnly.none(), TeamsController.getTeam);
 
 // Image + other fields
 router.post(
