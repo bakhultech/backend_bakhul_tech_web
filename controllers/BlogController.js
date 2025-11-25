@@ -7,52 +7,40 @@ const path = require("path");
 exports.getBlog = (req, res) => {
   const primary_id = req.body?.primary_id || null;
 
-  // If blog ID → return single blog
+  let sql = "";
+  let params = [];
+
   if (primary_id) {
-    const sql = "SELECT * FROM blogs WHERE primary_id = ? LIMIT 1";
-
-    db.query(sql, [primary_id], (err, result) => {
-      if (err) {
-        console.error("DB ERROR:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Database Error",
-        });
-      }
-
-      if (result.length === 0) {
-        return res.json({
-          success: false,
-          message: "Blog not found",
-        });
-      }
-
-      return res.json({
-        success: true,
-        data: result[0],
-      });
-    });
+    sql = "SELECT * FROM blogs WHERE primary_id = ?";
+    params = [primary_id];
+  } else {
+    sql = "SELECT * FROM blogs ORDER BY primary_id DESC";
   }
 
-  // Get all blogs
-  else {
-    const sql = "SELECT * FROM blogs ORDER BY primary_id DESC";
-
-    db.query(sql, (err, result) => {
-      if (err) {
-        console.error("DB ERROR:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Database Error",
-        });
-      }
-
-      return res.json({
-        success: true,
-        data: result,
+  db.query(sql, params, (err, result) => {
+    if (err) {
+      console.error("DB ERROR:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Database Error",
       });
+    }
+
+    // ===== FULL PATH BUILD (Same as Team Controller) =====
+    const basePath = `${req.protocol}://${req.get("host")}/assets/blogs/`;
+
+    const finalData = result.map((item) => ({
+      ...item,
+      coverImgFull: item.coverImg ? basePath + item.coverImg : null,
+      blogImgFull: item.blogImg ? basePath + item.blogImg : null,
+    }));
+
+    return res.json({
+      success: true,
+      assetPathName: basePath,
+      data: primary_id ? finalData[0] : finalData,
     });
-  }
+  });
 };
 
 // ================== SAVE BLOG (ADD/UPDATE) ==================
@@ -60,81 +48,100 @@ exports.saveBlog = (req, res) => {
   const { primary_id, title, subtitle, category, shortDesc, fullDesc } =
     req.body;
 
-  // Image handling
+  // filename only
   const coverImg = req.files?.coverImg ? req.files.coverImg[0].filename : null;
   const blogImg = req.files?.blogImg ? req.files.blogImg[0].filename : null;
 
-  // 1️⃣ UPDATE BLOG
+  // ------------ UPDATE ------------
   if (primary_id) {
-    // If images updated
-    const updateSql = `
-      UPDATE blogs SET
-        title = ?, 
-        subtitle = ?, 
-        category = ?, 
-        shortDesc = ?, 
-        fullDesc = ?,
-        coverImg = COALESCE(?, coverImg),
-        blogImg = COALESCE(?, blogImg)
-      WHERE primary_id = ?
-    `;
+    // Fetch old images
+    const getOldSql =
+      "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?";
 
-    db.query(
-      updateSql,
-      [
-        title,
-        subtitle,
-        category,
-        shortDesc,
-        fullDesc,
-        coverImg,
-        blogImg,
-        primary_id,
-      ],
-      (err) => {
-        if (err) {
-          console.error("UPDATE BLOG ERROR:", err);
-          return res.status(500).json({
-            success: false,
-            message: "Update Failed",
-          });
-        }
-
-        return res.json({
-          success: true,
-          message: "Blog Updated Successfully",
+    db.query(getOldSql, [primary_id], (err, data) => {
+      if (err) {
+        console.log("FETCH OLD IMG ERROR:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Database Error",
         });
       }
-    );
-  }
 
-  // 2️⃣ ADD NEW BLOG
-  else {
-    const insertSql = `
-      INSERT INTO blogs 
-      (title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
+      const oldCover = data[0]?.coverImg;
+      const oldBlog = data[0]?.blogImg;
 
-    db.query(
-      insertSql,
-      [title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg],
-      (err) => {
-        if (err) {
-          console.error("INSERT BLOG ERROR:", err);
-          return res.status(500).json({
-            success: false,
-            message: "Insert Failed",
+      const finalCover = coverImg ? coverImg : oldCover;
+      const finalBlog = blogImg ? blogImg : oldBlog;
+
+      const updateSql = `
+        UPDATE blogs SET
+          title = ?, 
+          subtitle = ?, 
+          category = ?, 
+          shortDesc = ?, 
+          fullDesc = ?,
+          coverImg = ?, 
+          blogImg = ?
+        WHERE primary_id = ?
+      `;
+
+      db.query(
+        updateSql,
+        [
+          title,
+          subtitle,
+          category,
+          shortDesc,
+          fullDesc,
+          finalCover,
+          finalBlog,
+          primary_id,
+        ],
+        (err) => {
+          if (err) {
+            console.error("UPDATE BLOG ERROR:", err);
+            return res.status(500).json({
+              success: false,
+              message: "Update Failed",
+            });
+          }
+
+          return res.json({
+            success: true,
+            message: "Blog Updated Successfully",
           });
         }
+      );
+    });
 
-        return res.json({
-          success: true,
-          message: "Blog Added Successfully",
+    return;
+  }
+
+  // ------------ ADD NEW ------------
+  const insertSql = `
+    INSERT INTO blogs 
+    (title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  db.query(
+    insertSql,
+    [title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg],
+    (err) => {
+      if (err) {
+        console.error("INSERT BLOG ERROR:", err);
+        return res.status(500).json({
+          success: false,
+          message: "Insert Failed",
         });
       }
-    );
-  }
+
+      return res.json({
+        success: true,
+        message: "Blog Added Successfully",
+      });
+    }
+  );
 };
 
 // ================== DELETE BLOG ==================

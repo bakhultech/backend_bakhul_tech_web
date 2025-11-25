@@ -28,6 +28,6 @@ router.post(
 );
 
 router.post("/get_blog", textOnly.none(), blog.getBlog);
-router.post("/delete-blog", textOnly.none(), blog.deleteBlog);
+router.post("/delete_blog", textOnly.none(), blog.deleteBlog);
 
 module.exports = router;
