@@ -1,5 +1,4 @@
 // ================= BLOG CONTROLLER ===================
-
 const db = require("../config/db");
 const path = require("path");
 
@@ -26,7 +25,6 @@ exports.getBlog = (req, res) => {
       });
     }
 
-    // ===== FULL PATH BUILD (Same as Team Controller) =====
     const basePath = `${req.protocol}://${req.get("host")}/assets/blogs/`;
 
     const finalData = result.map((item) => ({
@@ -45,16 +43,14 @@ exports.getBlog = (req, res) => {
 
 // ================== SAVE BLOG (ADD/UPDATE) ==================
 exports.saveBlog = (req, res) => {
-  const { primary_id, title, subtitle, category, shortDesc, fullDesc } =
+  const { primary_id, title, subtitle, author, category, shortDesc, fullDesc } =
     req.body;
 
-  // filename only
   const coverImg = req.files?.coverImg ? req.files.coverImg[0].filename : null;
   const blogImg = req.files?.blogImg ? req.files.blogImg[0].filename : null;
 
   // ------------ UPDATE ------------
   if (primary_id) {
-    // Fetch old images
     const getOldSql =
       "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?";
 
@@ -77,6 +73,7 @@ exports.saveBlog = (req, res) => {
         UPDATE blogs SET
           title = ?, 
           subtitle = ?, 
+          author = ?,
           category = ?, 
           shortDesc = ?, 
           fullDesc = ?,
@@ -90,6 +87,7 @@ exports.saveBlog = (req, res) => {
         [
           title,
           subtitle,
+          author,
           category,
           shortDesc,
           fullDesc,
@@ -120,13 +118,13 @@ exports.saveBlog = (req, res) => {
   // ------------ ADD NEW ------------
   const insertSql = `
     INSERT INTO blogs 
-    (title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    (title, subtitle, author, category, shortDesc, fullDesc, coverImg, blogImg)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.query(
     insertSql,
-    [title, subtitle, category, shortDesc, fullDesc, coverImg, blogImg],
+    [title, subtitle, author, category, shortDesc, fullDesc, coverImg, blogImg],
     (err) => {
       if (err) {
         console.error("INSERT BLOG ERROR:", err);
