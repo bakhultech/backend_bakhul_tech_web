@@ -6,7 +6,7 @@ const multer = require("multer");
 // ======== BLOG IMAGE UPLOAD CONFIG =========
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "./assets/blogs"); // correct folder
+    cb(null, "./assets/blogs");
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + "-" + file.originalname);
@@ -18,6 +18,7 @@ const textOnly = multer();
 
 // ========== ROUTES ==========
 
+// ADD / UPDATE BLOG
 router.post(
   "/save_blog",
   blogUpload.fields([
@@ -27,7 +28,14 @@ router.post(
   blog.saveBlog
 );
 
+// GET BLOG (single or all)
 router.post("/get_blog", textOnly.none(), blog.getBlog);
+
+// DELETE BLOG
 router.post("/delete_blog", textOnly.none(), blog.deleteBlog);
+
+// GET BLOG BY CATEGORY
+router.post("/get_blog_by_category", textOnly.none(), blog.getBlogByCategory);
+router.post("/blog_details", textOnly.none(), blog.blogDetails);
 
 module.exports = router;

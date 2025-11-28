@@ -20,15 +20,19 @@ const ContactModel = require("./models/ContactModel");
 const FAQModel = require("./models/FaqModel");
 const TeamsModel = require("./models/TeamsModel");
 const TestimonialModel = require("./models/TestimonialModel");
+
+const BlogCategoryModel = require("./models/BlogCategoryModel");
 const BlogModel = require("./models/BlogModel");
 
-// ======== INIT TABLES (IMPORTANT) ========
+// ======== INIT TABLES (IMPORTANT ORDER) ========
 if (WebsiteInfoModel.initializeTable) WebsiteInfoModel.initializeTable();
 if (LoginModel.initializeTable) LoginModel.initializeTable();
 if (ContactModel.initializeTable) ContactModel.initializeTable();
 if (FAQModel.initializeTable) FAQModel.initializeTable();
 if (TeamsModel.initializeTable) TeamsModel.initializeTable();
 if (TestimonialModel.initializeTable) TestimonialModel.initializeTable();
+
+if (BlogCategoryModel.initializeTable) BlogCategoryModel.initializeTable();
 if (BlogModel.initializeTable) BlogModel.initializeTable();
 
 // ===================== ROUTES =====================
@@ -38,7 +42,8 @@ const ContactRoute = require("./routes/ContactRoute");
 const FaqRoute = require("./routes/FaqRoute");
 const TeamsRoute = require("./routes/TeamsRoute");
 const TestimonialRoute = require("./routes/TestimonialRoute");
-const blogRoutes = require("./routes/blogRoutes");
+const BlogRoute = require("./routes/BlogRoute");
+const BlogCategoryRoute = require("./routes/BlogCategoryRoute");
 
 app.use("/api/admin_link", LoginRoute);
 app.use("/api/admin_link", WebsiteInfoRoute);
@@ -46,7 +51,8 @@ app.use("/api/admin_link", ContactRoute);
 app.use("/api/admin_link", FaqRoute);
 app.use("/api/admin_link", TeamsRoute);
 app.use("/api/admin_link", TestimonialRoute);
-app.use("/api/admin_link", blogRoutes);
+app.use("/api/admin_link", BlogRoute);
+app.use("/api/admin_link", BlogCategoryRoute);
 
 // =============== START SERVER ===============
 const PORT = process.env.PORT || 5000;
