@@ -1,4 +1,8 @@
+require("dotenv").config();
 const mysql = require("mysql2");
+
+// Just for render/git detection 👇 (safe change)
+console.log("🔧 Loading MySQL Connection Using ENV Variables...");
 
 const connection = mysql.createPool({
   host: process.env.DB_HOST,
