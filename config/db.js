@@ -1,16 +1,18 @@
+// config/db.js
 const mysql = require("mysql2");
 
 // ===================== CONFIG =====================
 const config = {
-  host: process.env.MYSQLHOST || process.env.DB_HOST || "localhost",
-  user: process.env.MYSQLUSER || process.env.DB_USER || "root",
-  password: process.env.MYSQLPASSWORD || process.env.DB_PASS || "",
-  database: process.env.MYSQLDATABASE || process.env.DB_NAME || "test",
-  port: Number(process.env.MYSQLPORT || process.env.DB_PORT || 3306),
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: Number(process.env.DB_PORT),
   waitForConnections: true,
   connectionLimit: 20,
   queueLimit: 0,
-  multipleStatements: true,
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: true } : false,
+  multipleStatements: true
 };
 
 // ===================== CREATE POOL =====================
@@ -24,12 +26,9 @@ db.getConnection((err, connection) => {
     console.log("➡ Host:", config.host);
     console.log("➡ Database:", config.database);
   } else {
-    console.log(
-      `✅ MySQL Connected Successfully (Host: ${config.host}, DB: ${config.database})`
-    );
+    console.log(`✅ MySQL Connected Successfully (Host: ${config.host}, DB: ${config.database})`);
     connection.release();
   }
 });
 
-// Export pool
 module.exports = db;
