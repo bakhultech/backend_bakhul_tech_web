@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const ContactController = require("../controllers/ContactController");
+const ContactController = require("../controllers/ContactControllerr");
 const multer = require("multer");
 const upload = multer();
 
