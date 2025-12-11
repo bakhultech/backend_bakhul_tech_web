@@ -1,59 +1,81 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
+const path = require("path");
 require("dotenv").config();
 const db = require("./config/db");
 
+// ============================================
+//              APP SETUP
+// ============================================
 const app = express();
 const upload = multer();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/assets", express.static("assets"));
+app.use("/assets", express.static(path.join(__dirname, "assets")));
 
-// ===================== MODELS =====================
-const WebsiteInfoModel = require("./models/WebsiteInfoModel");
-const LoginModel = require("./models/LoginModel");
-const ContactModel = require("./models/ContactModel");
-const FAQModel = require("./models/FaqModel");
-const TeamsModel = require("./models/TeamsModel");
-const TestimonialModel = require("./models/TestimonialModel");
+// ============================================
+//       CHECK DATABASE CONNECTION (POOL)
+// ============================================
+db.getConnection((err, connection) => {
+  if (err) {
+    console.error("❌ Database Connection Failed:", err.message);
+  } else {
+    console.log("✅ Database Connected Successfully");
+    connection.release();
+  }
+});
 
-const BlogCategoryModel = require("./models/BlogCategoryModel");
-const BlogModel = require("./models/BlogModel");
+// ============================================
+//                 MODELS
+// ============================================
+const models = [
+  require("./models/WebsiteInfoModel"),
+  require("./models/LoginModel"),
+  require("./models/ContactModel"),
+  require("./models/FaqModel"),
+  require("./models/TeamsModel"),
+  require("./models/TestimonialModel"),
+  require("./models/BlogCategoryModel"),
+  require("./models/BlogModel"),
+];
 
-// ======== INIT TABLES (IMPORTANT ORDER) ========
-if (WebsiteInfoModel.initializeTable) WebsiteInfoModel.initializeTable();
-if (LoginModel.initializeTable) LoginModel.initializeTable();
-if (ContactModel.initializeTable) ContactModel.initializeTable();
-if (FAQModel.initializeTable) FAQModel.initializeTable();
-if (TeamsModel.initializeTable) TeamsModel.initializeTable();
-if (TestimonialModel.initializeTable) TestimonialModel.initializeTable();
+// Initialize all tables
+models.forEach((model) => {
+  if (model.initializeTable) {
+    model.initializeTable();
+  }
+});
 
-if (BlogCategoryModel.initializeTable) BlogCategoryModel.initializeTable();
-if (BlogModel.initializeTable) BlogModel.initializeTable();
+// ============================================
+//                 ROUTES
+// ============================================
+const routes = [
+  require("./routes/LoginRoute"),
+  require("./routes/WebsiteInfoRoute"),
+  require("./routes/ContactRoute"),
+  require("./routes/FaqRoute"),
+  require("./routes/TeamsRoute"),
+  require("./routes/TestimonialRoute"),
+  require("./routes/BlogRoute"),
+  require("./routes/BlogCategoryRoute"),
+];
 
-// ===================== ROUTES =====================
-const LoginRoute = require("./routes/LoginRoute");
-const WebsiteInfoRoute = require("./routes/WebsiteInfoRoute");
-const ContactRoute = require("./routes/ContactRoute");
-const FaqRoute = require("./routes/FaqRoute");
-const TeamsRoute = require("./routes/TeamsRoute");
-const TestimonialRoute = require("./routes/TestimonialRoute");
-const BlogRoute = require("./routes/BlogRoute");
-const BlogCategoryRoute = require("./routes/BlogCategoryRoute");
+routes.forEach((route) => app.use("/api/admin_link", route));
 
-app.use("/api/admin_link", LoginRoute);
-app.use("/api/admin_link", WebsiteInfoRoute);
-app.use("/api/admin_link", ContactRoute);
-app.use("/api/admin_link", FaqRoute);
-app.use("/api/admin_link", TeamsRoute);
-app.use("/api/admin_link", TestimonialRoute);
-app.use("/api/admin_link", BlogRoute);
-app.use("/api/admin_link", BlogCategoryRoute);
+// ============================================
+//              HEALTH CHECK
+// ============================================
+app.get("/", (req, res) => {
+  res.send("🚀 Bakhul Tech Backend Running Successfully!");
+});
 
-// =============== START SERVER ===============
+// ============================================
+//              START SERVER
+// ============================================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
