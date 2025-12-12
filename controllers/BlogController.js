@@ -1,4 +1,5 @@
-// ================= BLOG CONTROLLER (FINAL SEO VERSION WITH SLUG + blogImgFull) ===================
+// controllers/BlogController.js
+
 const db = require("../config/db");
 
 // Utility: slugify
@@ -6,7 +7,7 @@ function slugify(str) {
   return str
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s-]/g, "") // remove special chars
+    .replace(/[^\w\s-]/g, "")
     .replace(/\s+/g, "-");
 }
 
@@ -23,34 +24,25 @@ exports.getBlog = (req, res) => {
       ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
   `;
 
-  if (primary_id) {
-    sql += ` WHERE b.primary_id = ${db.escape(primary_id)}`;
-  }
-
+  if (primary_id) sql += ` WHERE b.primary_id = ${db.escape(primary_id)}`;
   sql += ` GROUP BY b.primary_id ORDER BY b.primary_id DESC`;
 
   db.query(sql, (err, result) => {
     if (err) {
       console.error("DB ERROR:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Database Error" });
+      return res.status(500).json({ success: false, message: "Database Error" });
     }
-
-    const basePath = `${req.protocol}://${req.get("host")}/assets/blogs/`;
 
     const finalData = result.map((item) => ({
       ...item,
       category: item.category ? JSON.parse(item.category) : [],
       category_names: item.category_names || "",
-      coverImgFull: item.coverImg ? basePath + item.coverImg : null,
-      blogImgFull: item.blogImg ? basePath + item.blogImg : null,
-      created_at: item.created_at || null,
+      coverImgFull: item.coverImg || null, // Cloudinary URL
+      blogImgFull: item.blogImg || null, // Cloudinary URL
     }));
 
     return res.json({
       success: true,
-      assetPathName: basePath,
       data: primary_id ? finalData[0] : finalData,
     });
   });
@@ -61,10 +53,11 @@ exports.saveBlog = async (req, res) => {
   let { primary_id, title, subtitle, author, category, shortDesc, fullDesc } =
     req.body;
 
-  const slug = slugify(title); // auto-generate slug
+  const slug = slugify(title);
 
   let categorySlugs = [];
 
+  // Parse categories
   if (category) {
     try {
       const catNames =
@@ -81,24 +74,23 @@ exports.saveBlog = async (req, res) => {
 
       categorySlugs = slugResult.map((row) => row.slug);
     } catch (e) {
-      console.log("Category parse error:", e);
       categorySlugs = [];
     }
   }
 
   const finalCategoryJson = JSON.stringify(categorySlugs);
-  const coverImg = req.files?.coverImg ? req.files.coverImg[0].filename : null;
-  const blogImg = req.files?.blogImg ? req.files.blogImg[0].filename : null;
 
-  // UPDATE BLOG
+  // Cloudinary URLs from route (NOT filenames)
+  const coverImg = req.body.coverImg || null;
+  const blogImg = req.body.blogImg || null;
+
+  // ================= UPDATE BLOG =================
   if (primary_id) {
-    const getOldSql =
-      "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?";
+    const getOldSql = "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?";
+
     db.query(getOldSql, [primary_id], (err, data) => {
       if (err || !data.length) {
-        return res
-          .status(500)
-          .json({ success: false, message: "Blog not found" });
+        return res.status(500).json({ success: false, message: "Blog not found" });
       }
 
       const finalCover = coverImg || data[0].coverImg;
@@ -106,9 +98,9 @@ exports.saveBlog = async (req, res) => {
 
       const updateSql = `
         UPDATE blogs SET
-          title = ?, subtitle = ?, author = ?, category = ?, 
-          shortDesc = ?, fullDesc = ?, coverImg = ?, blogImg = ?, slug = ?
-        WHERE primary_id = ?
+          title=?, subtitle=?, author=?, category=?, 
+          shortDesc=?, fullDesc=?, coverImg=?, blogImg=?, slug=?
+        WHERE primary_id=?
       `;
 
       db.query(
@@ -140,7 +132,7 @@ exports.saveBlog = async (req, res) => {
     return;
   }
 
-  // ADD NEW BLOG
+  // ================= ADD NEW BLOG =================
   const insertSql = `
     INSERT INTO blogs 
     (title, subtitle, author, category, shortDesc, fullDesc, coverImg, blogImg, slug) 
@@ -156,8 +148,8 @@ exports.saveBlog = async (req, res) => {
       finalCategoryJson,
       shortDesc,
       fullDesc,
-      coverImg,
-      blogImg,
+      coverImg, // Cloudinary URL
+      blogImg,  // Cloudinary URL
       slug,
     ],
     (err) => {
@@ -176,9 +168,8 @@ exports.saveBlog = async (req, res) => {
 exports.deleteBlog = (req, res) => {
   const { primary_id } = req.body;
 
-  if (!primary_id) {
+  if (!primary_id)
     return res.json({ success: false, message: "ID Required" });
-  }
 
   const sql = "DELETE FROM blogs WHERE primary_id = ?";
 
@@ -196,63 +187,43 @@ exports.getBlogByCategory = (req, res) => {
   let { category } = req.body;
 
   if (!category) {
-    return res.json({ success: false, message: "Category slug is required" });
+    return res.json({ success: false, message: "Category slug required" });
   }
 
   const sql = `
     SELECT 
-      b.primary_id,
-      b.title,
-      b.subtitle,
-      b.shortDesc,
-      b.author,
-      b.category,
-      b.coverImg,
-      b.blogImg,
-      b.slug,
-      b.created_at,
+      b.*, 
       GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
     FROM blogs b
     LEFT JOIN blog_categories c 
       ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
     WHERE JSON_CONTAINS(b.category, JSON_QUOTE(?))
     GROUP BY b.primary_id
-    ORDER BY b.created_at DESC, b.primary_id DESC
+    ORDER BY b.primary_id DESC
   `;
 
   db.query(sql, [category], (err, result) => {
     if (err) {
       console.error("CATEGORY FILTER ERROR:", err);
-      return res
-        .status(500)
-        .json({ success: false, message: "Database Error" });
+      return res.status(500).json({ success: false, message: "Database Error" });
     }
 
-    const basePath = `${req.protocol}://${req.get("host")}/assets/blogs/`;
-
     const finalData = result.map((item) => ({
-      primary_id: item.primary_id,
-      title: item.title,
-      subtitle: item.subtitle || "",
-      shortDesc: item.shortDesc || "",
-      author: item.author || "Admin",
-      slug: item.slug,
+      ...item,
       category: item.category ? JSON.parse(item.category) : [],
       category_names: item.category_names || "",
-      coverImgFull: item.coverImg ? basePath + item.coverImg : null,
-      blogImgFull: item.blogImg ? basePath + item.blogImg : null,
-      created_at: item.created_at || null,
+      coverImgFull: item.coverImg || null,
+      blogImgFull: item.blogImg || null,
     }));
 
     return res.json({
       success: true,
-      count: finalData.length,
       data: finalData,
     });
   });
 };
 
-// ================== BLOG FULL DETAILS (FETCH BY SLUG) ==================
+// ================== BLOG FULL DETAILS ==================
 exports.blogDetails = (req, res) => {
   const { slug } = req.body;
 
@@ -262,7 +233,7 @@ exports.blogDetails = (req, res) => {
 
   const sql = `
     SELECT 
-      b.*,
+      b.*, 
       GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
     FROM blogs b
     LEFT JOIN blog_categories c 
@@ -274,23 +245,21 @@ exports.blogDetails = (req, res) => {
   db.query(sql, [slug], (err, result) => {
     if (err) {
       console.error("DETAIL ERROR:", err);
-      return res.json({ success: false, message: "Database Error" });
+      return res.status(500).json({ success: false, message: "Database Error" });
     }
 
     if (!result.length) {
       return res.json({ success: false, message: "Blog not found" });
     }
 
-    const basePath = `${req.protocol}://${req.get("host")}/assets/blogs/`;
     const data = result[0];
 
     const finalData = {
       ...data,
       category: data.category ? JSON.parse(data.category) : [],
       category_names: data.category_names || "",
-      coverImgFull: data.coverImg ? basePath + data.coverImg : null,
-      blogImgFull: data.blogImg ? basePath + data.blogImg : null,
-      created_at: data.created_at || null,
+      coverImgFull: data.coverImg || null,
+      blogImgFull: data.blogImg || null,
     };
 
     return res.json({
