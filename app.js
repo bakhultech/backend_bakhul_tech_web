@@ -1,37 +1,46 @@
 // app.js
-
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
 require("dotenv").config();
 
 const { getDB } = require("./config/db");
 
 const app = express();
-const upload = multer();
 
-// ===================== CORS =====================
+/* ===================== CORS ===================== */
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://superadminbakhultech.netlify.app",
+  "https://bakhultech.com",
+  "https://adminpanelbakhultech.vercel.app",
+  "https://bakhultechadmin.vercel.app",
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://superadminbakhultech.netlify.app",
-      "https://bakhultech.com",
-      "https://adminpanelbakhultech.vercel.app",
-      "https://bakhultechadmin.vercel.app/"
-    ],
+    origin: function (origin, callback) {
+      // Allow server-to-server / Postman / Render internal calls
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+/* ===================== BODY PARSERS ===================== */
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// ===================== INIT DB + MODELS =====================
+/* ===================== INIT DB + MODELS ===================== */
 (async () => {
   try {
-    await getDB();
+    const db = await getDB();
     console.log("✅ DB pool ready");
 
     const models = [
@@ -44,72 +53,73 @@ app.use(express.urlencoded({ extended: true }));
     ];
 
     for (const model of models) {
-      if (model.initializeTable) {
+      if (typeof model.initializeTable === "function") {
         await model.initializeTable();
       }
-      if (model.insertDefault) {
+      if (typeof model.insertDefault === "function") {
         await model.insertDefault();
       }
     }
 
     console.log("✅ All models initialized");
   } catch (error) {
-    console.error("❌ Startup error:", error.message);
-    process.exit(1);
+    console.error("❌ Startup error:", error);
+    // ❗ Render pe process.exit mat karo (container restart loop)
   }
 })();
 
-// ===================== ROUTES =====================
-const routes = [
-  require("./routes/LoginRoute"),
-  require("./routes/WebsiteInfoRoute"),
-  require("./routes/ContactRoute"),
-  require("./routes/TeamsRoute"),
-  require("./routes/BlogRoute"),
-  require("./routes/BlogCategoryRoute"),
-];
+/* ===================== ROUTES ===================== */
+app.use("/api/admin_link", require("./routes/LoginRoute"));
+app.use("/api/admin_link", require("./routes/WebsiteInfoRoute"));
+app.use("/api/admin_link", require("./routes/ContactRoute"));
+app.use("/api/admin_link", require("./routes/TeamsRoute"));
+app.use("/api/admin_link", require("./routes/BlogRoute"));
+app.use("/api/admin_link", require("./routes/BlogCategoryRoute"));
 
-routes.forEach((route) => app.use("/api/admin_link", route));
-
-/**
- * ===================== HEALTH CHECK (NO DB HIT) =====================
- * 👉 UptimeRobot isi URL ko hit karega
- * 👉 Zero cost
- * 👉 Zero DB load
- * 👉 Prevents Render sleep
- */
+/* ===================== HEALTH CHECK (NO DB HIT) ===================== */
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
     service: "bakhul-tech-backend",
     uptime: process.uptime(),
-    timestamp: Date.now(),
+    timestamp: new Date().toISOString(),
   });
 });
 
-/**
- * ===================== DB HEALTH (OPTIONAL) =====================
- * ❗ Isko UptimeRobot me use mat karna
- * Sirf manual check ke liye
- */
+/* ===================== DB HEALTH (MANUAL CHECK ONLY) ===================== */
 app.get("/db-health", async (req, res) => {
   try {
     const db = await getDB();
     await db.query("SELECT 1");
-    res.send("✅ Database connected");
+    res.status(200).send("✅ Database connected");
   } catch (err) {
     res.status(500).send("❌ Database not reachable");
   }
 });
 
-/**
- * ===================== ROOT =====================
- */
+/* ===================== ROOT ===================== */
 app.get("/", (req, res) => {
-  res.send("🚀 Bakhul Tech Backend is running");
+  res.status(200).send("🚀 Bakhul Tech Backend is running");
 });
 
-// ===================== START SERVER =====================
+/* ===================== 404 HANDLER ===================== */
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
+
+/* ===================== GLOBAL ERROR HANDLER ===================== */
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err.message);
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+  });
+});
+
+/* ===================== START SERVER ===================== */
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
