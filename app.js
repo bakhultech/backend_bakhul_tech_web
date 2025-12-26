@@ -18,6 +18,7 @@ app.use(
       "https://superadminbakhultech.netlify.app",
       "https://bakhultech.com",
       "https://adminpanelbakhultech.vercel.app",
+      "https://bakhultechadmin.vercel.app/"
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
