@@ -1,16 +1,15 @@
-// routes/BlogRoute.js
-
+//BlogRoute
 const express = require("express");
 const router = express.Router();
 const blog = require("../controllers/BlogController");
 const multer = require("multer");
 const { uploadToCloudinary } = require("../utils/uploadToCloudinary");
 
-// Multer (memory storage for Cloudinary)
+// Multer memory storage (required for Cloudinary)
 const upload = multer({ storage: multer.memoryStorage() });
 const textOnly = multer();
 
-// ===================== ROUTES =====================
+// ========== ROUTES ==========
 
 // ADD / UPDATE BLOG
 router.post(
@@ -21,7 +20,7 @@ router.post(
   ]),
   async (req, res) => {
     try {
-      // Upload Cover Image
+      // Upload to Cloudinary — coverImg
       if (req.files?.coverImg?.[0]) {
         const uploadResult = await uploadToCloudinary(
           req.files.coverImg[0].buffer,
@@ -30,20 +29,19 @@ router.post(
         req.body.coverImg = uploadResult.secure_url; // Cloudinary URL
       }
 
-      // Upload Blog Image
+      // Upload to Cloudinary — blogImg
       if (req.files?.blogImg?.[0]) {
         const uploadResult2 = await uploadToCloudinary(
           req.files.blogImg[0].buffer,
           "blogs"
         );
-        req.body.blogImg = uploadResult2.secure_url; // Cloudinary URL
+        req.body.blogImg = uploadResult2.secure_url;
       }
 
-      // Call main controller
       blog.saveBlog(req, res);
     } catch (err) {
       console.error("Cloudinary Upload Error:", err);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         message: "Image upload failed",
       });
@@ -51,7 +49,7 @@ router.post(
   }
 );
 
-// GET BLOG(S)
+// GET BLOG (single or all)
 router.post("/get_blog", textOnly.none(), blog.getBlog);
 
 // DELETE BLOG
@@ -60,7 +58,7 @@ router.post("/delete_blog", textOnly.none(), blog.deleteBlog);
 // GET BLOG BY CATEGORY
 router.post("/get_blog_by_category", textOnly.none(), blog.getBlogByCategory);
 
-// BLOG DETAILS BY SLUG
+// BLOG DETAILS
 router.post("/blog_details", textOnly.none(), blog.blogDetails);
 
 module.exports = router;

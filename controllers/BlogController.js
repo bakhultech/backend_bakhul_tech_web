@@ -1,6 +1,5 @@
-// controllers/BlogController.js
-
-const db = require("../config/db");
+// ================= BLOG CONTROLLER ===================
+const { getDB } = require("../config/db");
 
 // Utility: slugify
 function slugify(str) {
@@ -12,89 +11,92 @@ function slugify(str) {
 }
 
 // ================== GET ALL BLOGS OR SINGLE BLOG ==================
-exports.getBlog = (req, res) => {
-  const primary_id = req.body?.primary_id || null;
+exports.getBlog = async (req, res) => {
+  try {
+    const db = await getDB();
+    const primary_id = req.body?.primary_id || null;
 
-  let sql = `
-    SELECT 
-      b.*,
-      GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
-    FROM blogs b
-    LEFT JOIN blog_categories c 
-      ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
-  `;
+    let sql = `
+      SELECT 
+        b.*,
+        GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
+      FROM blogs b
+      LEFT JOIN blog_categories c 
+        ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
+    `;
 
-  if (primary_id) sql += ` WHERE b.primary_id = ${db.escape(primary_id)}`;
-  sql += ` GROUP BY b.primary_id ORDER BY b.primary_id DESC`;
+    const params = [];
 
-  db.query(sql, (err, result) => {
-    if (err) {
-      console.error("DB ERROR:", err);
-      return res.status(500).json({ success: false, message: "Database Error" });
+    if (primary_id) {
+      sql += ` WHERE b.primary_id = ?`;
+      params.push(primary_id);
     }
+
+    sql += ` GROUP BY b.primary_id ORDER BY b.primary_id DESC`;
+
+    const [result] = await db.query(sql, params);
 
     const finalData = result.map((item) => ({
       ...item,
       category: item.category ? JSON.parse(item.category) : [],
       category_names: item.category_names || "",
-      coverImgFull: item.coverImg || null, // Cloudinary URL
-      blogImgFull: item.blogImg || null, // Cloudinary URL
+      coverImgFull: item.coverImg || null,
+      blogImgFull: item.blogImg || null,
+      created_at: item.created_at || null,
     }));
 
     return res.json({
       success: true,
       data: primary_id ? finalData[0] : finalData,
     });
-  });
+  } catch (err) {
+    console.error("GET BLOG ERROR:", err);
+    return res.status(500).json({ success: false, message: "Database Error" });
+  }
 };
 
 // ================== SAVE BLOG (ADD / UPDATE) ==================
 exports.saveBlog = async (req, res) => {
-  let { primary_id, title, subtitle, author, category, shortDesc, fullDesc } =
-    req.body;
+  try {
+    const db = await getDB();
 
-  const slug = slugify(title);
+    let { primary_id, title, subtitle, author, category, shortDesc, fullDesc } =
+      req.body;
 
-  let categorySlugs = [];
+    const slug = slugify(title);
+    let categorySlugs = [];
 
-  // Parse categories
-  if (category) {
-    try {
+    if (category) {
       const catNames =
         typeof category === "string" ? JSON.parse(category) : category;
-      const placeholders = catNames.map(() => "?").join(",");
-      const slugSql = `SELECT slug FROM blog_categories WHERE name IN (${placeholders})`;
 
-      const slugResult = await new Promise((resolve, reject) => {
-        db.query(slugSql, catNames, (err, result) => {
-          if (err) return reject(err);
-          resolve(result);
-        });
-      });
-
-      categorySlugs = slugResult.map((row) => row.slug);
-    } catch (e) {
-      categorySlugs = [];
+      if (Array.isArray(catNames) && catNames.length) {
+        const placeholders = catNames.map(() => "?").join(",");
+        const slugSql = `SELECT slug FROM blog_categories WHERE name IN (${placeholders})`;
+        const [slugResult] = await db.query(slugSql, catNames);
+        categorySlugs = slugResult.map((row) => row.slug);
+      }
     }
-  }
 
-  const finalCategoryJson = JSON.stringify(categorySlugs);
+    const finalCategoryJson = JSON.stringify(categorySlugs);
+    const coverImg = req.body.coverImg || null;
+    const blogImg = req.body.blogImg || null;
 
-  // Cloudinary URLs from route (NOT filenames)
-  const coverImg = req.body.coverImg || null;
-  const blogImg = req.body.blogImg || null;
+    // 🔁 UPDATE BLOG
+    if (primary_id) {
+      const [oldData] = await db.query(
+        "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?",
+        [primary_id]
+      );
 
-  // ================= UPDATE BLOG =================
-  if (primary_id) {
-    const getOldSql = "SELECT coverImg, blogImg FROM blogs WHERE primary_id = ?";
-
-    db.query(getOldSql, [primary_id], (err, data) => {
-      if (err || !data.length) {
-        return res.status(500).json({ success: false, message: "Blog not found" });
+      if (!oldData.length) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Blog not found" });
       }
 
-      const finalCover = coverImg || data[0].coverImg;
-      const finalBlog = blogImg || data[0].blogImg;
+      const finalCover = coverImg || oldData[0].coverImg;
+      const finalBlog = blogImg || oldData[0].blogImg;
 
       const updateSql = `
         UPDATE blogs SET
@@ -103,150 +105,159 @@ exports.saveBlog = async (req, res) => {
         WHERE primary_id=?
       `;
 
-      db.query(
-        updateSql,
-        [
-          title,
-          subtitle,
-          author,
-          finalCategoryJson,
-          shortDesc,
-          fullDesc,
-          finalCover,
-          finalBlog,
-          slug,
-          primary_id,
-        ],
-        (err) => {
-          if (err) {
-            console.error("UPDATE ERROR:", err);
-            return res
-              .status(500)
-              .json({ success: false, message: "Update Failed" });
-          }
-          res.json({ success: true, message: "Blog Updated Successfully!" });
-        }
-      );
-    });
+      await db.query(updateSql, [
+        title,
+        subtitle,
+        author,
+        finalCategoryJson,
+        shortDesc,
+        fullDesc,
+        finalCover,
+        finalBlog,
+        slug,
+        primary_id,
+      ]);
 
-    return;
-  }
+      return res.json({ success: true, message: "Blog Updated Successfully!" });
+    }
 
-  // ================= ADD NEW BLOG =================
-  const insertSql = `
-    INSERT INTO blogs 
-    (title, subtitle, author, category, shortDesc, fullDesc, coverImg, blogImg, slug) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+    // ➕ ADD NEW BLOG
+    const insertSql = `
+      INSERT INTO blogs 
+      (title, subtitle, author, category, shortDesc, fullDesc, coverImg, blogImg, slug) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
 
-  db.query(
-    insertSql,
-    [
+    await db.query(insertSql, [
       title,
       subtitle,
       author,
       finalCategoryJson,
       shortDesc,
       fullDesc,
-      coverImg, // Cloudinary URL
-      blogImg,  // Cloudinary URL
+      coverImg,
+      blogImg,
       slug,
-    ],
-    (err) => {
-      if (err) {
-        console.error("INSERT ERROR:", err);
-        return res
-          .status(500)
-          .json({ success: false, message: "Failed to add blog" });
-      }
-      res.json({ success: true, message: "Blog Added Successfully!" });
-    }
-  );
+    ]);
+
+    return res.json({ success: true, message: "Blog Added Successfully!" });
+  } catch (err) {
+    console.error("SAVE BLOG ERROR:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Save Blog Failed" });
+  }
 };
 
 // ================== DELETE BLOG ==================
-exports.deleteBlog = (req, res) => {
-  const { primary_id } = req.body;
+exports.deleteBlog = async (req, res) => {
+  try {
+    const db = await getDB();
+    const { primary_id } = req.body;
 
-  if (!primary_id)
-    return res.json({ success: false, message: "ID Required" });
-
-  const sql = "DELETE FROM blogs WHERE primary_id = ?";
-
-  db.query(sql, [primary_id], (err) => {
-    if (err) {
-      console.error("DELETE BLOG ERROR:", err);
-      return res.status(500).json({ success: false, message: "Delete Failed" });
+    if (!primary_id) {
+      return res.json({ success: false, message: "ID Required" });
     }
-    res.json({ success: true, message: "Blog Deleted Successfully" });
-  });
+
+    await db.query("DELETE FROM blogs WHERE primary_id = ?", [primary_id]);
+
+    return res.json({
+      success: true,
+      message: "Blog Deleted Successfully",
+    });
+  } catch (err) {
+    console.error("DELETE BLOG ERROR:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Delete Failed" });
+  }
 };
 
 // ================== GET BLOGS BY CATEGORY ==================
-exports.getBlogByCategory = (req, res) => {
-  let { category } = req.body;
+exports.getBlogByCategory = async (req, res) => {
+  try {
+    const db = await getDB();
+    const { category } = req.body;
 
-  if (!category) {
-    return res.json({ success: false, message: "Category slug required" });
-  }
-
-  const sql = `
-    SELECT 
-      b.*, 
-      GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
-    FROM blogs b
-    LEFT JOIN blog_categories c 
-      ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
-    WHERE JSON_CONTAINS(b.category, JSON_QUOTE(?))
-    GROUP BY b.primary_id
-    ORDER BY b.primary_id DESC
-  `;
-
-  db.query(sql, [category], (err, result) => {
-    if (err) {
-      console.error("CATEGORY FILTER ERROR:", err);
-      return res.status(500).json({ success: false, message: "Database Error" });
+    if (!category) {
+      return res.json({
+        success: false,
+        message: "Category slug is required",
+      });
     }
 
+    const sql = `
+      SELECT 
+        b.primary_id,
+        b.title,
+        b.subtitle,
+        b.shortDesc,
+        b.author,
+        b.category,
+        b.coverImg,
+        b.blogImg,
+        b.slug,
+        b.created_at,
+        GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
+      FROM blogs b
+      LEFT JOIN blog_categories c 
+        ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
+      WHERE JSON_CONTAINS(b.category, JSON_QUOTE(?))
+      GROUP BY b.primary_id
+      ORDER BY b.created_at DESC, b.primary_id DESC
+    `;
+
+    const [result] = await db.query(sql, [category]);
+
     const finalData = result.map((item) => ({
-      ...item,
+      primary_id: item.primary_id,
+      title: item.title,
+      subtitle: item.subtitle || "",
+      shortDesc: item.shortDesc || "",
+      author: item.author || "Admin",
+      slug: item.slug,
       category: item.category ? JSON.parse(item.category) : [],
       category_names: item.category_names || "",
       coverImgFull: item.coverImg || null,
       blogImgFull: item.blogImg || null,
+      created_at: item.created_at || null,
     }));
 
     return res.json({
       success: true,
+      count: finalData.length,
       data: finalData,
     });
-  });
+  } catch (err) {
+    console.error("GET BLOG BY CATEGORY ERROR:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Database Error" });
+  }
 };
 
-// ================== BLOG FULL DETAILS ==================
-exports.blogDetails = (req, res) => {
-  const { slug } = req.body;
+// ================== BLOG DETAILS BY SLUG ==================
+exports.blogDetails = async (req, res) => {
+  try {
+    const db = await getDB();
+    const { slug } = req.body;
 
-  if (!slug) {
-    return res.json({ success: false, message: "Slug required" });
-  }
-
-  const sql = `
-    SELECT 
-      b.*, 
-      GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
-    FROM blogs b
-    LEFT JOIN blog_categories c 
-      ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
-    WHERE b.slug = ?
-    GROUP BY b.primary_id
-  `;
-
-  db.query(sql, [slug], (err, result) => {
-    if (err) {
-      console.error("DETAIL ERROR:", err);
-      return res.status(500).json({ success: false, message: "Database Error" });
+    if (!slug) {
+      return res.json({ success: false, message: "Slug required" });
     }
+
+    const sql = `
+      SELECT 
+        b.*,
+        GROUP_CONCAT(c.name SEPARATOR ', ') AS category_names
+      FROM blogs b
+      LEFT JOIN blog_categories c 
+        ON JSON_CONTAINS(b.category, JSON_QUOTE(c.slug))
+      WHERE b.slug = ?
+      GROUP BY b.primary_id
+    `;
+
+    const [result] = await db.query(sql, [slug]);
 
     if (!result.length) {
       return res.json({ success: false, message: "Blog not found" });
@@ -254,17 +265,21 @@ exports.blogDetails = (req, res) => {
 
     const data = result[0];
 
-    const finalData = {
-      ...data,
-      category: data.category ? JSON.parse(data.category) : [],
-      category_names: data.category_names || "",
-      coverImgFull: data.coverImg || null,
-      blogImgFull: data.blogImg || null,
-    };
-
     return res.json({
       success: true,
-      data: finalData,
+      data: {
+        ...data,
+        category: data.category ? JSON.parse(data.category) : [],
+        category_names: data.category_names || "",
+        coverImgFull: data.coverImg || null,
+        blogImgFull: data.blogImg || null,
+        created_at: data.created_at || null,
+      },
     });
-  });
+  } catch (err) {
+    console.error("BLOG DETAILS ERROR:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Database Error" });
+  }
 };

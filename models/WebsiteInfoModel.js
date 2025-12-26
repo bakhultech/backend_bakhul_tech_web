@@ -1,7 +1,13 @@
-const db = require("../config/db");
+// models/WebsiteInfoModel.js
+const { getDB } = require("../config/db");
 
-const WebsiteInfoModel = {
-  initializeTable: () => {
+const WebsiteInfoModel = {};
+
+// ================= CREATE TABLE =================
+WebsiteInfoModel.initializeTable = async () => {
+  try {
+    const db = await getDB();
+
     const sql = `
       CREATE TABLE IF NOT EXISTS website_info (
         primary_id INT PRIMARY KEY,
@@ -13,47 +19,40 @@ const WebsiteInfoModel = {
         facebook VARCHAR(255),
         instagram VARCHAR(255),
         youtube VARCHAR(255),
-        linkedin VARCHAR(255),                    -- LinkedIn added
+        linkedin VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
-    db.query(sql, (err) => {
-      if (err) {
-        console.error("Table creation error:", err);
-      } else {
-        console.log("website_info table created/ensured with LinkedIn");
-      }
-    });
-  },
-
-  insertDefault: () => {
-    const checkSql = "SELECT * FROM website_info WHERE primary_id = 1";
-
-    db.query(checkSql, (err, result) => {
-      if (err) {
-        console.error("Check error:", err);
-        return;
-      }
-
-      if (result.length === 0) {
-        const insertSql = `
-          INSERT INTO website_info 
-          (primary_id, email, phone, education_email, address, footerText, facebook, instagram, youtube, linkedin)
-          VALUES (1, '', '', '', '', '', '', '', '', '')
-        `;
-
-        db.query(insertSql, (err) => {
-          if (err) console.error("Default insert error:", err);
-          else console.log("Default website_info row created with LinkedIn");
-        });
-      }
-    });
-  },
+    await db.query(sql);
+    console.log("✅ website_info table created / ensured");
+  } catch (error) {
+    console.error("❌ website_info table error:", error.message);
+  }
 };
 
-// Run both
-WebsiteInfoModel.initializeTable();
-WebsiteInfoModel.insertDefault();
+// ================= INSERT DEFAULT ROW =================
+WebsiteInfoModel.insertDefault = async () => {
+  try {
+    const db = await getDB();
+
+    const [rows] = await db.query(
+      "SELECT primary_id FROM website_info WHERE primary_id = 1"
+    );
+
+    if (rows.length === 0) {
+      const insertSql = `
+        INSERT INTO website_info 
+        (primary_id, email, phone, education_email, address, footerText, facebook, instagram, youtube, linkedin)
+        VALUES (1, '', '', '', '', '', '', '', '', '')
+      `;
+
+      await db.query(insertSql);
+      console.log("✅ Default website_info row inserted");
+    }
+  } catch (error) {
+    console.error("❌ website_info default insert error:", error.message);
+  }
+};
 
 module.exports = WebsiteInfoModel;

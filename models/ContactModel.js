@@ -1,10 +1,16 @@
-const db = require("../config/db");
+// models/ContactModel.js
+const { getDB } = require("../config/db");
 
-const ContactModel = {
-  initializeTable: () => {
+const ContactModel = {};
+
+// ================= CREATE TABLE =================
+ContactModel.initializeTable = async () => {
+  try {
+    const db = await getDB();
+
     const sql = `
       CREATE TABLE IF NOT EXISTS contact_info (
-        primary_id INT PRIMARY KEY AUTO_INCREMENT,
+        primary_id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255),
         email VARCHAR(255),
         number VARCHAR(50),
@@ -17,16 +23,11 @@ const ContactModel = {
       );
     `;
 
-    db.query(sql, (err) => {
-      if (err) console.error("Table creation error:", err);
-    });
-  },
-
-  insertDefault: () => {
-    // Optional: No default row needed for contact form submissions
-  },
+    await db.query(sql);
+    console.log("✅ contact_info table ready");
+  } catch (error) {
+    console.error("❌ contact_info table error:", error.message);
+  }
 };
-
-ContactModel.initializeTable();
 
 module.exports = ContactModel;

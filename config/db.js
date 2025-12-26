@@ -1,34 +1,43 @@
 // config/db.js
-const mysql = require("mysql2");
+const mysql = require("mysql2/promise");
 
-// ===================== CONFIG =====================
-const config = {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  port: Number(process.env.DB_PORT),
-  waitForConnections: true,
-  connectionLimit: 20,
-  queueLimit: 0,
-  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: true } : false,
-  multipleStatements: true
-};
+let pool;
 
-// ===================== CREATE POOL =====================
-const db = mysql.createPool(config);
+async function createPool() {
+  pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    port: Number(process.env.DB_PORT),
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    multipleStatements: true,
 
-// ===================== CHECK INITIAL CONNECTION =====================
-db.getConnection((err, connection) => {
-  if (err) {
-    console.log("❌ MySQL Connection Failed");
-    console.log("➡ Error:", err.message);
-    console.log("➡ Host:", config.host);
-    console.log("➡ Database:", config.database);
-  } else {
-    console.log(`✅ MySQL Connected Successfully (Host: ${config.host}, DB: ${config.database})`);
+    // 🔥 IMPORTANT FIX FOR RAILWAY
+    ssl: {
+      rejectUnauthorized: false, // <-- THIS FIXES self-signed cert error
+    },
+  });
+
+  try {
+    const connection = await pool.getConnection();
+    console.log("✅ MySQL Connected Successfully");
     connection.release();
+  } catch (err) {
+    console.error("❌ MySQL initial connection failed:", err.message);
+    throw err; // fail fast if DB not reachable
   }
-});
 
-module.exports = db;
+  return pool;
+}
+
+async function getDB() {
+  if (!pool) {
+    await createPool();
+  }
+  return pool;
+}
+
+module.exports = { getDB };
