@@ -1,4 +1,3 @@
-// app.js
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -18,29 +17,26 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow server-to-server / Postman / Render internal calls
-      if (!origin) return callback(null, true);
-
+    origin(origin, callback) {
+      if (!origin) return callback(null, true); // server / postman
       if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+        return callback(null, true);
       }
+      return callback(new Error("CORS_NOT_ALLOWED"));
     },
-    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
 /* ===================== BODY PARSERS ===================== */
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 /* ===================== INIT DB + MODELS ===================== */
 (async () => {
   try {
-    const db = await getDB();
+    await getDB();
     console.log("✅ DB pool ready");
 
     const models = [
@@ -53,18 +49,13 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
     ];
 
     for (const model of models) {
-      if (typeof model.initializeTable === "function") {
-        await model.initializeTable();
-      }
-      if (typeof model.insertDefault === "function") {
-        await model.insertDefault();
-      }
+      if (model.initializeTable) await model.initializeTable();
+      if (model.insertDefault) await model.insertDefault();
     }
 
     console.log("✅ All models initialized");
-  } catch (error) {
-    console.error("❌ Startup error:", error);
-    // ❗ Render pe process.exit mat karo (container restart loop)
+  } catch (err) {
+    console.error("❌ Startup error:", err.message);
   }
 })();
 
@@ -76,33 +67,21 @@ app.use("/api/admin_link", require("./routes/TeamsRoute"));
 app.use("/api/admin_link", require("./routes/BlogRoute"));
 app.use("/api/admin_link", require("./routes/BlogCategoryRoute"));
 
-/* ===================== HEALTH CHECK (NO DB HIT) ===================== */
+/* ===================== HEALTH ===================== */
 app.get("/health", (req, res) => {
-  res.status(200).json({
+  res.json({
     status: "ok",
-    service: "bakhul-tech-backend",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
 });
 
-/* ===================== DB HEALTH (MANUAL CHECK ONLY) ===================== */
-app.get("/db-health", async (req, res) => {
-  try {
-    const db = await getDB();
-    await db.query("SELECT 1");
-    res.status(200).send("✅ Database connected");
-  } catch (err) {
-    res.status(500).send("❌ Database not reachable");
-  }
-});
-
 /* ===================== ROOT ===================== */
 app.get("/", (req, res) => {
-  res.status(200).send("🚀 Bakhul Tech Backend is running");
+  res.send("🚀 Bakhul Tech Backend Running");
 });
 
-/* ===================== 404 HANDLER ===================== */
+/* ===================== 404 ===================== */
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -110,16 +89,19 @@ app.use((req, res) => {
   });
 });
 
-/* ===================== GLOBAL ERROR HANDLER ===================== */
+/* ===================== GLOBAL ERROR ===================== */
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err.message);
   res.status(500).json({
     success: false,
-    message: "Internal server error",
+    message:
+      err.message === "CORS_NOT_ALLOWED"
+        ? "CORS blocked"
+        : "Internal server error",
   });
 });
 
-/* ===================== START SERVER ===================== */
+/* ===================== START ===================== */
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
