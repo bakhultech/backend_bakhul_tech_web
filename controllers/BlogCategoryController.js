@@ -34,18 +34,18 @@ async function ensureTableExists() {
     `;
 
     await db.query(createTableSql);
-    console.log("✅ blog_categories table ready");
   } catch (err) {
     console.error("❌ blog_categories table error:", err.message);
+    throw err;
   }
 }
-
-// ❌ auto-call yahin se mat karo
-// ensureTableExists();
 
 // ================= GET ALL =================
 exports.getBlogCategories = async (req, res) => {
   try {
+    // ✅ ensure table before query
+    await ensureTableExists();
+
     const db = await getDB();
 
     const sql = `
@@ -65,7 +65,7 @@ exports.getBlogCategories = async (req, res) => {
     const [rows] = await db.query(sql);
     res.json({ success: true, data: rows });
   } catch (err) {
-    console.error(err);
+    console.error("GET BLOG CATEGORY ERROR:", err);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
@@ -73,38 +73,57 @@ exports.getBlogCategories = async (req, res) => {
 // ================= ADD / UPDATE =================
 exports.addBlogCategory = async (req, res) => {
   try {
-    let { name, primary_id } = req.body;
-    if (!name) {
-      return res.status(400).json({ success: false, message: "Category name required" });
+    // ✅ ensure table before any operation
+    await ensureTableExists();
+
+    // ✅ HARD GUARD
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+
+    let name = body.name;
+    let primary_id = body.primary_id;
+
+    // 🛡 safety for array cases
+    if (Array.isArray(name)) name = name[0];
+    if (Array.isArray(primary_id)) primary_id = primary_id[0];
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Category name required",
+      });
     }
 
     name = name.trim();
     const slug = slugify(name);
     const db = await getDB();
 
-    // UPDATE
+    /* ================= UPDATE ================= */
     if (primary_id) {
       await db.query(
         "UPDATE blog_categories SET name=?, slug=? WHERE primary_id=?",
         [name, slug, primary_id]
       );
 
-      return res.json({ success: true, message: "Category updated successfully!" });
+      return res.json({
+        success: true,
+        message: "Category updated successfully!",
+      });
     }
 
-    // CHECK DUPLICATE
+    /* ================= DUPLICATE CHECK ================= */
     const [exist] = await db.query(
       "SELECT primary_id FROM blog_categories WHERE slug=?",
       [slug]
     );
 
     if (exist.length > 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Category already exists!" });
+      return res.status(400).json({
+        success: false,
+        message: "Category already exists!",
+      });
     }
 
-    // INSERT
+    /* ================= INSERT ================= */
     const [result] = await db.query(
       "INSERT INTO blog_categories (name, slug) VALUES (?,?)",
       [name, slug]
@@ -113,20 +132,37 @@ exports.addBlogCategory = async (req, res) => {
     res.json({
       success: true,
       message: "Category added successfully!",
-      data: { primary_id: result.insertId, name, slug },
+      data: {
+        primary_id: result.insertId,
+        name,
+        slug,
+      },
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
+    console.error("ADD BLOG CATEGORY ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
 // ================= DELETE =================
 exports.deleteBlogCategory = async (req, res) => {
   try {
-    const { primary_id } = req.body;
+    // ✅ ensure table exists
+    await ensureTableExists();
+
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    let primary_id = body.primary_id;
+
+    if (Array.isArray(primary_id)) primary_id = primary_id[0];
+
     if (!primary_id) {
-      return res.status(400).json({ success: false, message: "primary_id required" });
+      return res.status(400).json({
+        success: false,
+        message: "primary_id required",
+      });
     }
 
     const db = await getDB();
@@ -137,7 +173,10 @@ exports.deleteBlogCategory = async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(404).json({ success: false, message: "Category not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
     }
 
     const slug = rows[0].slug;
@@ -151,19 +190,26 @@ exports.deleteBlogCategory = async (req, res) => {
         JSON_UNQUOTE(JSON_SEARCH(category, 'one', ?))
       )
       WHERE JSON_CONTAINS(category, JSON_QUOTE(?))
-    `,
+      `,
       [slug, slug]
     );
 
     // delete category
-    await db.query("DELETE FROM blog_categories WHERE primary_id=?", [
-      primary_id,
-    ]);
+    await db.query(
+      "DELETE FROM blog_categories WHERE primary_id=?",
+      [primary_id]
+    );
 
-    res.json({ success: true, message: "Category deleted successfully!" });
+    res.json({
+      success: true,
+      message: "Category deleted successfully!",
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server Error" });
+    console.error("DELETE BLOG CATEGORY ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 
